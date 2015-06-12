@@ -1,0 +1,86 @@
+library(kernlab)
+library(ggplot2)
+
+
+if(!file.exists("activity.csv")) {
+        unzip("RepData_PeerAssessment1-master/activity.zip")
+}
+
+activity<-read.csv("activity.csv", header = TRUE, sep = ",", )
+
+activity$date <- as.Date(activity$date, "%Y-%m-%d")
+
+activity_no.na <- activity[complete.cases(activity),]
+
+daily.total.steps <-  tapply(activity$steps, activity$date, sum, na.rm = TRUE)
+
+
+qplot(daily.total.steps, xlab = "Total steps", ylab = "Frequency")
+
+mean <- mean(daily.total.steps)
+median <- median(daily.total.steps)
+
+time <- formatC(activity$interval/100, 1, format= "f")
+activity$date.time <- as.POSIXct(paste(activity$date, time), format = "%Y-%m-%d %H.%M", 
+                                 tz = "GMT")
+activity$time <- format(activity$date.time, format = "%H:%M:%S")
+activity$time <- as.POSIXct(activity$time, format = "%H:%M:%S")
+
+mean.steps <- tapply(activity$steps, activity$time, mean, na.rm = TRUE)
+daily.pattern <- data.frame(time = as.POSIXct(names(mean.steps)), mean.steps = mean.steps)
+
+ggplot(daily.pattern , aes(time, mean.steps)) + geom_line() + labs(title = expression("Average number of steps by time interval (excluding missing values)"))+ scale_x_datetime(minor_breaks = waiver())
+
+most <- which.max(daily.pattern$mean.steps)
+format(daily.pattern[most, "time"], format = "%H:%M")
+
+
+total_na <- sum(is.na(activity$steps))
+total_na
+percent_na <- paste(round(sum(is.na(activity$steps))/nrow(activity),2)*100,"%")
+percent_na
+
+new_activity<-activity
+for (i in 1:length(new_activity$steps)) {
+        if (is.na(new_activity[i, 1])) {
+                
+                
+                new_activity[i, 1] <- steps_average
+        } 
+}
+count_na <- sum(is.na(new_activity$steps))
+
+head(new_activity)
+
+
+
+ggplot(new_activity, aes(date, steps)) + geom_histogram(breaks = c(0,2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000,22500, 25000), stat="identity") + labs(y = expression("Number of steps per day")) + labs(x = expression("days")) + labs(title = expression("Total Number of steps per day (after filling in missing values)"))
+
+mean2<-round(mean(daily.pattern$mean.steps),4)
+median2<-round(median(daily.pattern$mean.steps),4)
+delta_mean<-(mean-mean2)/mean
+paste(round(100*delta_mean, 4), "%")
+delta_median<-(median-median2)/median
+paste(round(100*delta_median, 4), "%")
+weekend_log <- grepl("^[Ss]", weekdays(as.Date(new_activity$date)))
+
+for (i in (1:nrow(new_activity))) {
+        if (weekend_log[i] == TRUE) {
+                new_activity$day_of_week[i] <- "weekend"
+        } else {
+                new_activity$day_of_week[i] <- "weekday"
+        }
+}
+
+
+new_activity_no.na <- new_activity[complete.cases(new_activity),]
+summary <- aggregate(new_activity_no.na$steps,
+                     list(interval = new_activity_no.na$interval, day = new_activity_no.na$day_of_week), 
+                     mean)
+names(summary) <- c("interval", "day", "steps")
+
+library("lattice")
+
+xyplot(summary$steps ~ summary$interval | summary$day, 
+       layout = c(1, 2), type = "l",
+       xlab = "Interval", ylab = "Number of steps")
